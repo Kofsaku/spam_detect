@@ -74,15 +74,35 @@ export default function SpamDetector() {
 
   const analyzeContent = async (text: string) => {
     try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 60000); // 60秒のタイムアウト
+
       const response = await fetch("/api/analyze", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({ text }),
+        signal: controller.signal,
       });
 
-      const data = await response.json();
+      clearTimeout(timeoutId);
+
+      let data;
+      try {
+        const text = await response.text();
+        try {
+          data = JSON.parse(text);
+        } catch (e) {
+          console.error("JSON解析エラー:", text);
+          throw new Error("APIからの応答を解析できませんでした");
+        }
+      } catch (e) {
+        if (e instanceof Error && e.name === "AbortError") {
+          throw new Error("リクエストがタイムアウトしました");
+        }
+        throw e;
+      }
 
       if (!response.ok) {
         throw new Error(data.error || "分析中にエラーが発生しました");

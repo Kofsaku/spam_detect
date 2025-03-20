@@ -3,12 +3,14 @@ import OpenAI from "openai";
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
-  timeout: 30000, // 30秒のタイムアウトを設定
 });
 
 // レート制限のための変数
 let lastRequestTime = 0;
 const RATE_LIMIT_DELAY = 1000; // 1秒
+
+export const dynamic = 'force-dynamic'; // キャッシュを無効化
+export const revalidate = 0; // キャッシュを無効化
 
 // Edge Runtimeの設定を削除
 // export const runtime = 'edge';
@@ -164,7 +166,8 @@ ${text}
 6. 送信元の不自然さ
 7. 全体的な不自然さや違和感
 
-各危険要素について、具体的な該当文章を抽出して返してください。`,
+各危険要素について、具体的な該当文章を抽出して返してください。
+必ず有効なJSON形式で返してください。`,
         },
         {
           role: "user",
@@ -185,19 +188,21 @@ ${text}
 
     let analysis;
     try {
-      analysis = JSON.parse(result);
+      // 文字列の前後の空白を削除し、JSONとして解析
+      analysis = JSON.parse(result.trim());
     } catch (e) {
-      console.error("JSON解析エラー:", e);
+      console.error("JSON解析エラー:", result);
       return NextResponse.json(
-        { error: "分析結果の解析に失敗しました" },
+        { error: "分析結果の解析に失敗しました", raw: result },
         { status: 500 }
       );
     }
 
     // 必要なフィールドの検証
     if (!analysis.isScam || typeof analysis.confidence !== "number" || !Array.isArray(analysis.reasons) || !analysis.riskLevel || !analysis.details) {
+      console.error("分析結果の形式が不正:", analysis);
       return NextResponse.json(
-        { error: "分析結果の形式が不正です" },
+        { error: "分析結果の形式が不正です", raw: analysis },
         { status: 500 }
       );
     }
