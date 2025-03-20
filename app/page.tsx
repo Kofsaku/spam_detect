@@ -88,6 +88,10 @@ export default function SpamDetector() {
         throw new Error(data.error || "分析中にエラーが発生しました");
       }
 
+      if (!data || typeof data !== "object") {
+        throw new Error("無効なレスポンス形式です");
+      }
+
       return {
         isScam: data.isScam,
         confidence: data.confidence,
@@ -97,7 +101,10 @@ export default function SpamDetector() {
       };
     } catch (error) {
       console.error("分析エラー:", error);
-      throw error;
+      if (error instanceof Error) {
+        throw new Error(error.message);
+      }
+      throw new Error("予期せぬエラーが発生しました");
     }
   };
 

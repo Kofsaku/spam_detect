@@ -3,11 +3,16 @@ import OpenAI from "openai";
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
+  timeout: 30000, // 30秒のタイムアウトを設定
 });
 
 // レート制限のための変数
 let lastRequestTime = 0;
 const RATE_LIMIT_DELAY = 1000; // 1秒
+
+// Edge Runtimeの設定を削除
+// export const runtime = 'edge';
+// export const maxDuration = 30;
 
 export async function POST(req: Request) {
   try {
@@ -27,6 +32,13 @@ export async function POST(req: Request) {
       return NextResponse.json(
         { error: "テキストが正しく提供されていません。" },
         { status: 400 }
+      );
+    }
+
+    if (!process.env.OPENAI_API_KEY) {
+      return NextResponse.json(
+        { error: "OpenAI APIキーが設定されていません。" },
+        { status: 500 }
       );
     }
 
@@ -165,7 +177,10 @@ ${text}
 
     const result = completion.choices[0].message.content;
     if (!result) {
-      throw new Error("APIからの応答が空でした");
+      return NextResponse.json(
+        { error: "分析結果が空でした" },
+        { status: 500 }
+      );
     }
 
     let analysis;
@@ -196,8 +211,14 @@ ${text}
         { status: 500 }
       );
     }
+    if (error instanceof Error) {
+      return NextResponse.json(
+        { error: "分析中にエラーが発生しました: " + error.message },
+        { status: 500 }
+      );
+    }
     return NextResponse.json(
-      { error: "分析中にエラーが発生しました" },
+      { error: "予期せぬエラーが発生しました" },
       { status: 500 }
     );
   }
