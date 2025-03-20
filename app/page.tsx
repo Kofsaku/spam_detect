@@ -61,6 +61,27 @@ export default function SpamDetector() {
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
       const file = e.target.files[0]
+      
+      // ファイルサイズのチェック（4MB以下）
+      if (file.size > 4 * 1024 * 1024) {
+        toast({
+          title: "エラー",
+          description: "画像サイズは4MB以下にしてください",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      // ファイル形式のチェック
+      if (!file.type.startsWith('image/')) {
+        toast({
+          title: "エラー",
+          description: "画像ファイルを選択してください",
+          variant: "destructive",
+        });
+        return;
+      }
+
       setImage(file)
 
       // Create preview
@@ -72,7 +93,7 @@ export default function SpamDetector() {
     }
   }
 
-  const analyzeContent = async (text: string) => {
+  const analyzeContent = async (text: string, image?: string) => {
     try {
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 60000); // 60秒のタイムアウト
@@ -82,7 +103,7 @@ export default function SpamDetector() {
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ text }),
+        body: JSON.stringify({ text, image }),
         signal: controller.signal,
       });
 
@@ -129,7 +150,7 @@ export default function SpamDetector() {
   };
 
   const handleAnalyze = async () => {
-    if (!text.trim()) {
+    if (activeTab === "text" && !text.trim()) {
       toast({
         title: "エラー",
         description: "テキストを入力してください",
@@ -138,9 +159,31 @@ export default function SpamDetector() {
       return;
     }
 
+    if (activeTab === "image" && !image) {
+      toast({
+        title: "エラー",
+        description: "画像をアップロードしてください",
+        variant: "destructive",
+      });
+      return;
+    }
+
     setIsAnalyzing(true);
     try {
-      const result = await analyzeContent(text);
+      let result;
+      if (activeTab === "image" && image) {
+        // 画像をBase64に変換
+        const reader = new FileReader();
+        const base64Image = await new Promise<string>((resolve, reject) => {
+          reader.onload = () => resolve(reader.result as string);
+          reader.onerror = reject;
+          reader.readAsDataURL(image);
+        });
+
+        result = await analyzeContent("", base64Image);
+      } else {
+        result = await analyzeContent(text);
+      }
       setResult(result);
     } catch (error) {
       console.error("分析エラー:", error);
@@ -167,7 +210,7 @@ export default function SpamDetector() {
     <div className="container mx-auto py-10 max-w-3xl">
       <h1 className="text-3xl font-bold text-center mb-8">詐欺検出アプリ</h1>
       <p className="text-center mb-8 text-muted-foreground">
-        画像やテキストをアップロードして、高齢者を狙った詐欺の可能性を分析します
+        テキストや画像の詐欺の可能性を分析します。
       </p>
 
       <Card className="mb-8">
