@@ -1,103 +1,376 @@
-import Image from "next/image";
+"use client"
 
-export default function Home() {
+import type React from "react"
+
+import { useState } from "react"
+import { Upload, AlertTriangle, CheckCircle, Image, FileText } from "lucide-react"
+import { Button } from "@/components/ui/button"
+import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { Textarea } from "@/components/ui/textarea"
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
+import { toast } from "@/components/ui/use-toast"
+
+export default function SpamDetector() {
+  const [activeTab, setActiveTab] = useState("text")
+  const [text, setText] = useState("")
+  const [image, setImage] = useState<File | null>(null)
+  const [imagePreview, setImagePreview] = useState<string | null>(null)
+  const [result, setResult] = useState<{
+    isScam: boolean
+    confidence: number
+    reasons: string[]
+    riskLevel: string
+    details: {
+      urgency: {
+        detected: boolean
+        examples: string[]
+      }
+      moneyRequest: {
+        detected: boolean
+        examples: string[]
+      }
+      personalInfo: {
+        detected: boolean
+        examples: string[]
+      }
+      unnaturalInvitation: {
+        detected: boolean
+        examples: string[]
+      }
+      fearAppeal: {
+        detected: boolean
+        examples: string[]
+      }
+      suspiciousUrl: {
+        detected: boolean
+        examples: string[]
+      }
+      suspiciousSender: {
+        detected: boolean
+        examples: string[]
+      }
+      otherRisks: {
+        detected: boolean
+        examples: string[]
+      }
+    }
+  } | null>(null)
+  const [isAnalyzing, setIsAnalyzing] = useState(false)
+
+  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0]) {
+      const file = e.target.files[0]
+      setImage(file)
+
+      // Create preview
+      const reader = new FileReader()
+      reader.onload = (e) => {
+        setImagePreview(e.target?.result as string)
+      }
+      reader.readAsDataURL(file)
+    }
+  }
+
+  const analyzeContent = async (text: string) => {
+    try {
+      const response = await fetch("/api/analyze", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ text }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || "分析中にエラーが発生しました");
+      }
+
+      return {
+        isScam: data.isScam,
+        confidence: data.confidence,
+        reasons: data.reasons,
+        riskLevel: data.riskLevel,
+        details: data.details,
+      };
+    } catch (error) {
+      console.error("分析エラー:", error);
+      throw error;
+    }
+  };
+
+  const handleAnalyze = async () => {
+    if (!text.trim()) {
+      toast({
+        title: "エラー",
+        description: "テキストを入力してください",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setIsAnalyzing(true);
+    try {
+      const result = await analyzeContent(text);
+      setResult(result);
+    } catch (error) {
+      console.error("分析エラー:", error);
+      toast({
+        title: "エラー",
+        description: error instanceof Error ? error.message : "分析中にエラーが発生しました",
+        variant: "destructive",
+      });
+      setResult(null);
+    } finally {
+      setIsAnalyzing(false);
+    }
+  };
+
+  const resetAnalysis = () => {
+    setResult(null)
+    if (activeTab === "image") {
+      setImage(null)
+      setImagePreview(null)
+    }
+  }
+
   return (
-    <div className="grid grid-rows-[20px_1fr_20px] items-center justify-items-center min-h-screen p-8 pb-20 gap-16 sm:p-20 font-[family-name:var(--font-geist-sans)]">
-      <main className="flex flex-col gap-[32px] row-start-2 items-center sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={180}
-          height={38}
-          priority
-        />
-        <ol className="list-inside list-decimal text-sm/6 text-center sm:text-left font-[family-name:var(--font-geist-mono)]">
-          <li className="mb-2 tracking-[-.01em]">
-            Get started by editing{" "}
-            <code className="bg-black/[.05] dark:bg-white/[.06] px-1 py-0.5 rounded font-[family-name:var(--font-geist-mono)] font-semibold">
-              app/page.tsx
-            </code>
-            .
-          </li>
-          <li className="tracking-[-.01em]">
-            Save and see your changes instantly.
-          </li>
-        </ol>
+    <div className="container mx-auto py-10 max-w-3xl">
+      <h1 className="text-3xl font-bold text-center mb-8">詐欺検出アプリ</h1>
+      <p className="text-center mb-8 text-muted-foreground">
+        画像やテキストをアップロードして、高齢者を狙った詐欺の可能性を分析します
+      </p>
 
-        <div className="flex gap-4 items-center flex-col sm:flex-row">
-          <a
-            className="rounded-full border border-solid border-transparent transition-colors flex items-center justify-center bg-foreground text-background gap-2 hover:bg-[#383838] dark:hover:bg-[#ccc] font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 sm:w-auto"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
+      <Card className="mb-8">
+        <CardHeader>
+          <CardTitle>コンテンツを分析</CardTitle>
+          <CardDescription>テキストを入力するか、画像をアップロードしてください</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Tabs defaultValue="text" value={activeTab} onValueChange={setActiveTab}>
+            <TabsList className="grid w-full grid-cols-2 mb-4">
+              <TabsTrigger value="text" onClick={() => setActiveTab("text")}>
+                <FileText className="mr-2 h-4 w-4" />
+                テキスト
+              </TabsTrigger>
+              <TabsTrigger value="image" onClick={() => setActiveTab("image")}>
+                <Image className="mr-2 h-4 w-4" />
+                画像
+              </TabsTrigger>
+            </TabsList>
+
+            <TabsContent value="text">
+              <Textarea
+                placeholder="分析したいテキストを入力してください..."
+                className="min-h-[200px]"
+                value={text}
+                onChange={(e) => setText(e.target.value)}
+              />
+            </TabsContent>
+
+            <TabsContent value="image">
+              {!imagePreview ? (
+                <div className="border-2 border-dashed rounded-lg p-12 text-center">
+                  <Upload className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
+                  <p className="mb-4 text-muted-foreground">画像をドラッグ＆ドロップするか、クリックしてアップロード</p>
+                  <input
+                    type="file"
+                    id="image-upload"
+                    className="hidden"
+                    accept="image/*"
+                    onChange={handleImageUpload}
+                  />
+                  <Button asChild>
+                    <label htmlFor="image-upload">画像を選択</label>
+                  </Button>
+                </div>
+              ) : (
+                <div className="text-center">
+                  <div className="relative w-full max-w-md mx-auto mb-4">
+                    <img
+                      src={imagePreview || "/placeholder.svg"}
+                      alt="Uploaded content"
+                      className="rounded-lg max-h-[300px] mx-auto"
+                    />
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="absolute top-2 right-2"
+                      onClick={() => {
+                        setImage(null)
+                        setImagePreview(null)
+                      }}
+                    >
+                      変更
+                    </Button>
+                  </div>
+                </div>
+              )}
+            </TabsContent>
+          </Tabs>
+        </CardContent>
+        <CardFooter className="flex justify-between">
+          <Button variant="outline" onClick={resetAnalysis}>
+            リセット
+          </Button>
+          <Button
+            onClick={handleAnalyze}
+            disabled={isAnalyzing || (activeTab === "text" && !text) || (activeTab === "image" && !image)}
           >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={20}
-              height={20}
-            />
-            Deploy now
-          </a>
-          <a
-            className="rounded-full border border-solid border-black/[.08] dark:border-white/[.145] transition-colors flex items-center justify-center hover:bg-[#f2f2f2] dark:hover:bg-[#1a1a1a] hover:border-transparent font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 w-full sm:w-auto md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Read our docs
-          </a>
-        </div>
-      </main>
-      <footer className="row-start-3 flex gap-[24px] flex-wrap items-center justify-center">
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/file.svg"
-            alt="File icon"
-            width={16}
-            height={16}
-          />
-          Learn
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/window.svg"
-            alt="Window icon"
-            width={16}
-            height={16}
-          />
-          Examples
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/globe.svg"
-            alt="Globe icon"
-            width={16}
-            height={16}
-          />
-          Go to nextjs.org →
-        </a>
-      </footer>
+            {isAnalyzing ? "分析中..." : "分析する"}
+          </Button>
+        </CardFooter>
+      </Card>
+
+      {result && (
+        <Alert variant={result.isScam ? "destructive" : "default"}>
+          <div className="flex items-start">
+            {result.isScam ? (
+              <AlertTriangle className="h-5 w-5 mr-2 mt-0.5" />
+            ) : (
+              <CheckCircle className="h-5 w-5 mr-2 mt-0.5" />
+            )}
+            <div>
+              <AlertTitle className="text-lg">
+                {result.isScam
+                  ? `詐欺の可能性が高いです (${Math.round(result.confidence * 100)}% の確率)`
+                  : `詐欺の可能性は低いです (${Math.round((1 - result.confidence) * 100)}% の確率)`}
+              </AlertTitle>
+              <AlertDescription className="mt-2">
+                <p className="font-medium mb-2">分析結果:</p>
+                <ul className="list-disc pl-5 space-y-1">
+                  {result.reasons.map((reason, index) => (
+                    <li key={index}>{reason}</li>
+                  ))}
+                </ul>
+
+                <div className="mt-4 p-3 bg-muted rounded-md">
+                  <p className="font-medium mb-2">詳細な分析:</p>
+                  <ul className="space-y-4">
+                    {result.details.urgency.detected && (
+                      <li>
+                        <div className="flex items-center mb-1">
+                          <AlertTriangle className="h-4 w-4 mr-2 text-yellow-500" />
+                          <span className="font-medium">緊急性を煽る表現が検出されました</span>
+                        </div>
+                        <ul className="ml-6 list-disc text-sm text-muted-foreground">
+                          {result.details.urgency.examples.map((example, index) => (
+                            <li key={index}>{example}</li>
+                          ))}
+                        </ul>
+                      </li>
+                    )}
+                    {result.details.moneyRequest.detected && (
+                      <li>
+                        <div className="flex items-center mb-1">
+                          <AlertTriangle className="h-4 w-4 mr-2 text-yellow-500" />
+                          <span className="font-medium">金銭の要求が検出されました</span>
+                        </div>
+                        <ul className="ml-6 list-disc text-sm text-muted-foreground">
+                          {result.details.moneyRequest.examples.map((example, index) => (
+                            <li key={index}>{example}</li>
+                          ))}
+                        </ul>
+                      </li>
+                    )}
+                    {result.details.personalInfo.detected && (
+                      <li>
+                        <div className="flex items-center mb-1">
+                          <AlertTriangle className="h-4 w-4 mr-2 text-yellow-500" />
+                          <span className="font-medium">個人情報の要求が検出されました</span>
+                        </div>
+                        <ul className="ml-6 list-disc text-sm text-muted-foreground">
+                          {result.details.personalInfo.examples.map((example, index) => (
+                            <li key={index}>{example}</li>
+                          ))}
+                        </ul>
+                      </li>
+                    )}
+                    {result.details.unnaturalInvitation.detected && (
+                      <li>
+                        <div className="flex items-center mb-1">
+                          <AlertTriangle className="h-4 w-4 mr-2 text-yellow-500" />
+                          <span className="font-medium">不自然な勧誘表現が検出されました</span>
+                        </div>
+                        <ul className="ml-6 list-disc text-sm text-muted-foreground">
+                          {result.details.unnaturalInvitation.examples.map((example, index) => (
+                            <li key={index}>{example}</li>
+                          ))}
+                        </ul>
+                      </li>
+                    )}
+                    {result.details.fearAppeal.detected && (
+                      <li>
+                        <div className="flex items-center mb-1">
+                          <AlertTriangle className="h-4 w-4 mr-2 text-yellow-500" />
+                          <span className="font-medium">不安を煽る表現が検出されました</span>
+                        </div>
+                        <ul className="ml-6 list-disc text-sm text-muted-foreground">
+                          {result.details.fearAppeal.examples.map((example, index) => (
+                            <li key={index}>{example}</li>
+                          ))}
+                        </ul>
+                      </li>
+                    )}
+                    {result.details.suspiciousUrl.detected && (
+                      <li>
+                        <div className="flex items-center mb-1">
+                          <AlertTriangle className="h-4 w-4 mr-2 text-yellow-500" />
+                          <span className="font-medium">不審なURLが検出されました</span>
+                        </div>
+                        <ul className="ml-6 list-disc text-sm text-muted-foreground">
+                          {result.details.suspiciousUrl.examples.map((example, index) => (
+                            <li key={index}>{example}</li>
+                          ))}
+                        </ul>
+                      </li>
+                    )}
+                    {result.details.suspiciousSender.detected && (
+                      <li>
+                        <div className="flex items-center mb-1">
+                          <AlertTriangle className="h-4 w-4 mr-2 text-yellow-500" />
+                          <span className="font-medium">不審な送信元が検出されました</span>
+                        </div>
+                        <ul className="ml-6 list-disc text-sm text-muted-foreground">
+                          {result.details.suspiciousSender.examples.map((example, index) => (
+                            <li key={index}>{example}</li>
+                          ))}
+                        </ul>
+                      </li>
+                    )}
+                    {result.details.otherRisks.detected && (
+                      <li>
+                        <div className="flex items-center mb-1">
+                          <AlertTriangle className="h-4 w-4 mr-2 text-yellow-500" />
+                          <span className="font-medium">その他の危険な要素が検出されました</span>
+                        </div>
+                        <ul className="ml-6 list-disc text-sm text-muted-foreground">
+                          {result.details.otherRisks.examples.map((example, index) => (
+                            <li key={index}>{example}</li>
+                          ))}
+                        </ul>
+                      </li>
+                    )}
+                  </ul>
+                </div>
+
+                {result.isScam && (
+                  <div className="mt-4 p-3 bg-destructive/10 rounded-md">
+                    <p className="font-medium">注意事項:</p>
+                    <p className="text-sm mt-1">
+                      このコンテンツは詐欺の可能性が高いです。個人情報や金銭を要求されている場合は応じないでください。
+                      不審なメールやメッセージは、該当する組織の公式連絡先に確認することをお勧めします。
+                    </p>
+                  </div>
+                )}
+              </AlertDescription>
+            </div>
+          </div>
+        </Alert>
+      )}
     </div>
-  );
+  )
 }
+
