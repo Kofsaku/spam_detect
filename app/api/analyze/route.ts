@@ -1,8 +1,12 @@
 import { NextResponse } from "next/server";
 import OpenAI from "openai";
 
+// タイムアウトを60秒に設定
+export const maxDuration = 60;
+
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
+  timeout: 55000, // OpenAI APIのタイムアウトを55秒に設定
 });
 
 // レート制限のための変数
@@ -14,7 +18,6 @@ export const revalidate = 0; // キャッシュを無効化
 
 // Edge Runtimeの設定を削除
 // export const runtime = 'edge';
-// export const maxDuration = 30;
 
 export async function POST(req: Request) {
   try {
@@ -167,7 +170,8 @@ ${text}
 7. 全体的な不自然さや違和感
 
 各危険要素について、具体的な該当文章を抽出して返してください。
-必ず有効なJSON形式で返してください。`,
+必ず有効なJSON形式で返してください。
+分析は簡潔に行い、タイムアウトを避けるため、最も重要な要素に焦点を当ててください。`,
         },
         {
           role: "user",
@@ -175,7 +179,7 @@ ${text}
         },
       ],
       temperature: 0.7,
-      max_tokens: 1000,
+      max_tokens: 800, // トークン数を削減
     });
 
     const result = completion.choices[0].message.content;
